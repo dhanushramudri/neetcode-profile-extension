@@ -201,7 +201,7 @@ function render(d) {
     \${d.courses && Object.keys(d.courses).length ? renderCourses(d.courses) : ""}
 
 <div class="share-footer">
-  <p>Made with 🤍 by <a href="https://github.com/dhanushramnudri" target="_blank">dhanushramnudri</a> · Updated \${ago}</p>
+  <p>Made with 🤍 by <a href="https://github.com/dhanushramnudri" target="_blank">dhanushramnudri</a></p>
 </div>
   \`;
 
