@@ -4,14 +4,15 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 async function dbFetch(path, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    "apikey": SUPABASE_KEY,
+    "Authorization": `Bearer ${SUPABASE_KEY}`,
+    ...(options.headers || {}),
+  };
   return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${SUPABASE_KEY}`,
-      ...(options.headers || {}),
-    },
+    headers,
   });
 }
 
@@ -21,7 +22,7 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  // POST: save/update profile
+  // POST: upsert profile
   if (req.method === "POST") {
     const body = req.body || {};
     const { username } = body;
@@ -49,11 +50,27 @@ export default async function handler(req, res) {
       updated_at:          new Date().toISOString(),
     };
 
-    const r = await dbFetch("profiles", {
-      method: "POST",
-      headers: { "Prefer": "resolution=merge-duplicates" },
-      body: JSON.stringify(row),
-    });
+    // Use PATCH (update) if exists, POST (insert) if not
+    // First check if exists
+    const checkRes = await dbFetch(`profiles?username=eq.${encodeURIComponent(username.toLowerCase())}&limit=1`);
+    const existing = await checkRes.json();
+
+    let r;
+    if (existing.length > 0) {
+      // Update existing row
+      r = await dbFetch(`profiles?username=eq.${encodeURIComponent(username.toLowerCase())}`, {
+        method: "PATCH",
+        headers: { "Prefer": "return=minimal" },
+        body: JSON.stringify(row),
+      });
+    } else {
+      // Insert new row
+      r = await dbFetch("profiles", {
+        method: "POST",
+        headers: { "Prefer": "return=minimal" },
+        body: JSON.stringify(row),
+      });
+    }
 
     if (!r.ok) {
       const err = await r.text();
@@ -69,10 +86,7 @@ export default async function handler(req, res) {
     const username = (req.query.username || "").toLowerCase();
     if (!username) return res.status(400).json({ error: "Missing username" });
 
-    const r = await dbFetch(
-      `profiles?username=eq.${encodeURIComponent(username)}&limit=1`
-    );
-
+    const r = await dbFetch(`profiles?username=eq.${encodeURIComponent(username)}&limit=1`);
     if (!r.ok) return res.status(500).json({ error: "Database error" });
 
     const rows = await r.json();
