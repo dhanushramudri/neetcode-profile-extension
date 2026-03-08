@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/u/:username", "destination": "/profile-page/index.html" },
+    { "source": "/api/profile/:username", "destination": "/api/profile?username=:username" }
+  ]
+}

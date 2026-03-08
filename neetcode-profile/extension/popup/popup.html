@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>NeetCode Profile Share</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 340px;
+      background: #0f1117;
+      color: #e8eaf0;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #1a1f35 0%, #0f1117 100%);
+      border-bottom: 1px solid #1e2235;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #00d4aa, #627eff);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 600; font-size: 16px; color: #0f1117;
+    }
+    .logo-text { font-weight: 600; font-size: 15px; color: #fff; line-height: 1.2; }
+    .logo-sub  { font-size: 11px; color: #4a5070; margin-top: 2px; }
+
+    /* Sections */
+    .section { padding: 16px 18px; border-bottom: 1px solid #1a1d2e; }
+    .label {
+      font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: #3a4060; font-weight: 600; margin-bottom: 10px;
+    }
+
+    /* Status */
+    .status-row { display: flex; align-items: center; gap: 10px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #333; flex-shrink: 0; }
+    .dot.ok      { background: #00d4aa; box-shadow: 0 0 6px #00d4aa66; }
+    .dot.warn    { background: #f5a623; }
+    .dot.err     { background: #f87171; }
+    .dot.loading { background: #627eff; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+    .status-text { font-size: 13px; color: #8890b0; }
+    .status-text strong { color: #e8eaf0; }
+    .status-hint { font-size: 11px; color: #3a4060; margin-top: 6px; }
+
+    /* Profile row */
+    .profile-row { display: flex; align-items: center; gap: 12px; }
+    .avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      object-fit: cover; border: 2px solid #1e2235;
+    }
+    .avatar-placeholder {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: #1a1f35; border: 2px solid #1e2235;
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .profile-name { font-weight: 600; font-size: 15px; color: #fff; }
+    .profile-meta { font-size: 12px; color: #4a5070; margin-top: 2px; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat {
+      background: #141720; border: 1px solid #1e2235;
+      border-radius: 10px; padding: 12px 8px; text-align: center;
+    }
+    .stat-num {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 20px; font-weight: 600; color: #00d4aa; line-height: 1;
+    }
+    .stat-num.blue   { color: #627eff; }
+    .stat-num.orange { color: #f5a623; }
+    .stat-lbl { font-size: 10px; color: #3a4060; margin-top: 4px; }
+
+    /* Input */
+    input {
+      width: 100%;
+      background: #141720; border: 1px solid #1e2235;
+      border-radius: 8px; padding: 9px 12px;
+      font-size: 13px; color: #e8eaf0;
+      font-family: 'IBM Plex Mono', monospace;
+      outline: none; transition: border .2s;
+    }
+    input:focus { border-color: #627eff; }
+    input::placeholder { color: #2a2f45; }
+
+    /* Buttons */
+    .btn {
+      border: none; border-radius: 8px;
+      padding: 9px 14px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all .15s;
+      font-family: 'Inter', sans-serif;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #00d4aa, #627eff);
+      color: #0f1117; width: 100%; padding: 11px;
+      margin-top: 8px; font-size: 14px;
+    }
+    .btn-primary:hover   { opacity: .9; transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: .3; cursor: not-allowed; transform: none; }
+    .btn-sm {
+      background: #1a1f35; color: #8890b0;
+      border: 1px solid #1e2235; padding: 8px 12px; font-size: 12px;
+    }
+    .btn-sm:hover { background: #1e2438; color: #e8eaf0; }
+
+    /* Link box */
+    .link-box {
+      background: #141720; border: 1px solid #1e2235;
+      border-radius: 10px; padding: 12px;
+    }
+    .link-url {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px; color: #627eff;
+      word-break: break-all; margin-bottom: 10px;
+    }
+    .link-btns { display: flex; gap: 8px; }
+
+    /* Warning */
+    .warn-box {
+      background: #1a1400; border: 1px solid #2a2000;
+      border-radius: 10px; padding: 18px; text-align: center;
+    }
+    .warn-box .icon { font-size: 28px; margin-bottom: 8px; }
+    .warn-box p { font-size: 12px; color: #6a6030; line-height: 1.7; }
+    .warn-box a { color: #f5a623; text-decoration: none; }
+
+    /* Footer */
+    .footer { padding: 10px 18px; text-align: center; }
+    .footer-text { font-size: 10px; color: #2a2f45; font-family: 'IBM Plex Mono', monospace; }
+
+    /* Sync badge */
+    .sync-badge {
+      display: inline-block;
+      background: #0d1a10; color: #00d4aa;
+      border: 1px solid #00d4aa33;
+      font-size: 10px; padding: 2px 8px; border-radius: 20px;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- NOT on neetcode.io -->
+<div id="notOnSite" style="display:none">
+  <div class="header">
+    <div class="logo-icon">N</div>
+    <div>
+      <div class="logo-text">NeetCode Profile Share</div>
+      <div class="logo-sub">Third-party · Unofficial</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="warn-box">
+      <div class="icon">🔒</div>
+      <p>Visit <a href="https://neetcode.io" target="_blank">neetcode.io</a> and log in so we can capture your progress automatically.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Main UI -->
+<div id="mainUI">
+  <div class="header">
+    <div class="logo-icon">N</div>
+    <div>
+      <div class="logo-text">NeetCode Profile Share</div>
+      <div class="logo-sub">Third-party · Unofficial</div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="section">
+    <div class="label">Status</div>
+    <div class="status-row">
+      <div class="dot loading" id="dot"></div>
+      <div class="status-text" id="statusText">Waiting for NeetCode data…</div>
+    </div>
+    <div class="status-hint" id="statusHint"></div>
+  </div>
+
+  <!-- Profile identity -->
+  <div class="section" id="profileSection" style="display:none">
+    <div class="label">Signed In As</div>
+    <div class="profile-row">
+      <img id="avatarImg" class="avatar" style="display:none"/>
+      <div class="avatar-placeholder" id="avatarPlaceholder">👤</div>
+      <div>
+        <div class="profile-name" id="profileName">—</div>
+        <div class="profile-meta" id="profileMeta">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="section" id="statsSection" style="display:none">
+    <div class="label">Your Progress</div>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-num" id="statSolved">—</div>
+        <div class="stat-lbl">Solved</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num blue" id="statPercentile">—</div>
+        <div class="stat-lbl">Percentile</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num orange" id="statStreak">—</div>
+        <div class="stat-lbl">Streak 🔥</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Username & publish -->
+  <div class="section">
+    <div class="label">Your Public Username</div>
+    <input type="text" id="usernameInput" placeholder="e.g. dhanush" maxlength="30"/>
+    <button class="btn btn-primary" id="publishBtn" disabled>🚀 Generate Public Profile</button>
+    <div class="status-hint" id="publishHint"></div>
+  </div>
+
+  <!-- Shareable link -->
+  <div class="section" id="linkSection" style="display:none">
+    <div class="label">Your Shareable Link</div>
+    <div class="link-box">
+      <div class="link-url" id="linkUrl"></div>
+      <div class="link-btns">
+        <button class="btn btn-sm" id="copyBtn" style="flex:1">📋 Copy</button>
+        <button class="btn btn-sm" id="openBtn">↗ Open</button>
+        <button class="btn btn-sm" id="syncBtn">🔄 Sync</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-text" id="lastSyncedText"></div>
+  </div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>
