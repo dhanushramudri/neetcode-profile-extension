@@ -2,6 +2,8 @@
 
 Get a shareable public profile URL for your NeetCode account — paste it in your resume, bio, or anywhere you want to show your progress.
 
+![NeetCard Profile Preview](screenshot.png)
+
 **Example:** `https://neetcard.vercel.app/u/yourname`
 
 ---
@@ -25,8 +27,6 @@ Get a shareable public profile URL for your NeetCode account — paste it in you
 6. Done ✅
 
 ---
-
-![NeetCard Profile Preview](screenshot.png)
 
 ## Get Your Profile URL
 
