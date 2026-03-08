@@ -115,6 +115,32 @@ body {
 .dist-lbl    { font-size: 9px; color: var(--text3); white-space: nowrap; }
 
 /* ── Heatmap ──────────────────────────────────────────────────── */
+.heatmap-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+}
+.heatmap-header-left { display: flex; flex-direction: column; gap: 2px; }
+
+/* Year filter pills */
+.year-filter {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+.year-btn {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px; font-weight: 600;
+  padding: 4px 10px; border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text3);
+  cursor: pointer; transition: all 0.15s ease;
+  letter-spacing: 0.5px;
+}
+.year-btn:hover {
+  border-color: var(--blue); color: var(--blue);
+}
+.year-btn.active {
+  background: var(--blue); border-color: var(--blue);
+  color: #fff;
+}
+
 .heatmap-wrap { overflow-x: auto; }
 .heatmap-months { display: flex; gap: 3px; margin-bottom: 4px; }
 .month-lbl      { font-size: 9px; color: var(--text3); flex: 1; }
@@ -128,16 +154,38 @@ body {
 .cell[data-l="2"] { background: #196c2e; }
 .cell[data-l="3"] { background: #2ea043; }
 .cell[data-l="4"] { background: #56d364; }
-.cell:hover::after {
-  content: attr(data-tip);
-  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
-  background: #1a1f35; border: 1px solid var(--border);
-  color: var(--text); font-size: 10px; padding: 4px 8px; border-radius: 6px;
-  white-space: nowrap; pointer-events: none; z-index: 10;
+
+/* ── Smart tooltip (JS-positioned, never clips) ───────────────── */
+#heatmap-tooltip {
+  position: fixed;
+  background: #1a1f35;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 11px;
   font-family: 'Inter', sans-serif;
+  padding: 5px 10px;
+  border-radius: 7px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
-.heatmap-footer { display: flex; justify-content: space-between; margin-top: 8px; }
+.heatmap-footer { display: flex; justify-content: space-between; margin-top: 8px; align-items: center; }
 .heatmap-footer span { font-size: 11px; color: var(--text3); }
+
+/* Year stats badge */
+.year-stats {
+  display: flex; gap: 16px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.year-stat { text-align: center; }
+.year-stat-val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 16px; font-weight: 700; color: var(--green);
+}
+.year-stat-lbl { font-size: 10px; color: var(--text3); margin-top: 2px; }
 
 /* ── Courses ──────────────────────────────────────────────────── */
 .courses-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -176,6 +224,8 @@ body {
   .banner      { flex-direction: column; text-align: center; }
   .banner-meta { justify-content: center; }
   .banner-right { text-align: center; }
+  .heatmap-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .year-stats  { flex-wrap: wrap; gap: 12px; }
 }
 </style>
 </head>
@@ -186,11 +236,9 @@ body {
 <script>
 const BACKEND = "https://neetcode-profile.vercel.app";
 
-// Parse /u/:username from URL
 const usernameMatch = location.pathname.match(/^\/u\/([a-z0-9_-]+)$/i);
 const USERNAME = usernameMatch ? usernameMatch[1].toLowerCase() : null;
 
-// ── Demo data (used when backend not yet deployed) ────────────────────────
 const DEMO = {
   username: "dhanush",
   displayName: "Dhanush ramudri",
@@ -211,6 +259,15 @@ const DEMO = {
   ],
   totalActiveUsers: 707896,
   activityByDate: {
+    "2024-01-05":{count:3},"2024-01-12":{count:7},"2024-02-03":{count:12},
+    "2024-02-14":{count:5},"2024-03-01":{count:9},"2024-03-20":{count:4},
+    "2024-04-10":{count:11},"2024-05-22":{count:6},"2024-06-15":{count:8},
+    "2024-07-04":{count:3},"2024-08-19":{count:15},"2024-09-30":{count:7},
+    "2024-10-11":{count:2},"2024-11-25":{count:10},"2024-12-31":{count:4},
+    "2025-01-08":{count:6},"2025-02-17":{count:14},"2025-03-05":{count:9},
+    "2025-04-22":{count:3},"2025-05-11":{count:18},"2025-06-30":{count:7},
+    "2025-07-15":{count:5},"2025-08-28":{count:11},"2025-09-09":{count:8},
+    "2025-10-20":{count:6},"2025-11-03":{count:13},"2025-12-25":{count:4},
     "2026-01-01":{count:13},"2026-01-02":{count:24},"2026-01-03":{count:5},
     "2026-01-05":{count:13},"2026-01-07":{count:5}, "2026-02-07":{count:19},
     "2026-02-09":{count:12},"2026-02-10":{count:18},"2026-02-11":{count:25},
@@ -226,6 +283,10 @@ const DEMO = {
   updatedAt: new Date().toISOString(),
 };
 
+// ── Global state for heatmap ──────────────────────────────────────────────
+let _activityByDate = {};
+let _selectedYear = null;
+
 async function loadProfile() {
   if (!USERNAME) { renderError("404", "Profile not found", "No username in the URL."); return; }
   document.title = `@${USERNAME} — NeetCode Profile`;
@@ -236,7 +297,6 @@ async function loadProfile() {
     if (!res.ok) throw new Error("not found");
     data = await res.json();
   } catch {
-    // Backend not deployed yet — show demo with this username
     data = { ...DEMO, username: USERNAME, displayName: USERNAME };
   }
 
@@ -249,7 +309,12 @@ function render(d) {
   const pctTotal = Math.min(100, Math.round((d.solved / (d.totalProblems || 533)) * 100));
   const joinYear = d.joined ? new Date(d.joined).getFullYear() : "—";
   const ago      = d.updatedAt ? timeAgo(new Date(d.updatedAt)) : "";
-  const activeDays = d.activityByDate ? Object.keys(d.activityByDate).length : 0;
+
+  _activityByDate = d.activityByDate || {};
+
+  // Detect all years present in data
+  const allYears = getAvailableYears(_activityByDate);
+  _selectedYear = allYears[allYears.length - 1] ?? new Date().getFullYear(); // default to latest
 
   document.getElementById("root").innerHTML = `
 
@@ -313,7 +378,9 @@ function render(d) {
     ${d.leaderboardBuckets ? renderDistribution(d.leaderboardBuckets) : ""}
 
     <!-- Activity heatmap -->
-    ${d.activityByDate ? renderHeatmap(d.activityByDate, activeDays) : ""}
+    <div class="card" id="heatmap-card">
+      ${renderHeatmapHTML(allYears)}
+    </div>
 
     <!-- Courses -->
     ${d.courses && Object.keys(d.courses).length ? renderCourses(d.courses) : ""}
@@ -327,8 +394,174 @@ function render(d) {
       </p>
     </div>
   `;
+
+  // Attach year button listeners after render
+  attachYearListeners();
 }
 
+// ── Get all unique years from activityByDate ──────────────────────────────
+function getAvailableYears(activityByDate) {
+  const years = new Set();
+  Object.keys(activityByDate).forEach(date => {
+    years.add(parseInt(date.slice(0, 4)));
+  });
+  // Always include current year even if no data
+  years.add(new Date().getFullYear());
+  return Array.from(years).sort();
+}
+
+// ── Render the full heatmap card HTML ─────────────────────────────────────
+function renderHeatmapHTML(allYears) {
+  const yearBtns = allYears.map(y =>
+    `<button class="year-btn ${y === _selectedYear ? 'active' : ''}" data-year="${y}">${y}</button>`
+  ).join("");
+
+  const activeDaysThisYear = countActiveDays(_activityByDate, _selectedYear);
+  const totalSubmissionsThisYear = countTotalSubmissions(_activityByDate, _selectedYear);
+
+  return `
+    <div class="heatmap-header">
+      <div class="heatmap-header-left">
+        <div class="sec-label" style="margin-bottom:0">Submission Activity</div>
+      </div>
+      <div class="year-filter" id="year-filter">
+        ${yearBtns}
+      </div>
+    </div>
+    <div id="heatmap-inner">
+      ${renderHeatmapGrid(_activityByDate, _selectedYear)}
+    </div>
+    <div class="year-stats">
+      <div class="year-stat">
+        <div class="year-stat-val" id="active-days-val">${activeDaysThisYear}</div>
+        <div class="year-stat-lbl">Active Days</div>
+      </div>
+      <div class="year-stat">
+        <div class="year-stat-val" id="total-subs-val">${totalSubmissionsThisYear}</div>
+        <div class="year-stat-lbl">Total Submissions</div>
+      </div>
+      <div class="year-stat">
+        <div class="year-stat-val" id="best-day-val">${getBestDay(_activityByDate, _selectedYear)}</div>
+        <div class="year-stat-lbl">Best Day</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Render just the grid (for year switching) ─────────────────────────────
+function renderHeatmapGrid(activityByDate, year) {
+  const isCurrentYear = year === new Date().getFullYear();
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // For past years: Jan 1 → Dec 31. For current year: 1 year back → today.
+  let start, end;
+  if (isCurrentYear) {
+    end = new Date(today);
+    start = new Date(today);
+    start.setDate(start.getDate() - 364 - start.getDay());
+  } else {
+    start = new Date(year, 0, 1);
+    start.setDate(start.getDate() - start.getDay()); // align to Sunday
+    end = new Date(year, 11, 31);
+  }
+
+  const weeks = [];
+  const cur = new Date(start);
+  while (cur <= end) {
+    const week = [];
+    for (let d = 0; d < 7; d++) {
+      const key    = cur.toISOString().slice(0, 10);
+      const inYear = isCurrentYear
+        ? cur <= today
+        : parseInt(key.slice(0, 4)) === year;
+      const count  = inYear ? (activityByDate[key]?.count ?? 0) : 0;
+      const level  = count === 0 ? 0 : count <= 3 ? 1 : count <= 10 ? 2 : count <= 20 ? 3 : 4;
+      const hide   = isCurrentYear ? cur > today : parseInt(key.slice(0, 4)) !== year;
+      week.push({ key, count, level, hide, date: new Date(cur) });
+      cur.setDate(cur.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  let lastM = -1;
+  const monthLabels = weeks.map(w => {
+    const m = w[0].date.getMonth();
+    if (m !== lastM && (!isCurrentYear || parseInt(w[0].date.getFullYear()) === year || w[0].date <= today)) {
+      lastM = m;
+      return `<span class="month-lbl">${MONTHS[m]}</span>`;
+    }
+    return `<span class="month-lbl"></span>`;
+  }).join("");
+
+  const grid = weeks.map(week =>
+    `<div class="heatmap-week">${week.map(c =>
+      c.hide
+        ? `<div class="cell" style="background:transparent"></div>`
+        : `<div class="cell" data-l="${c.level}" data-tip="${c.count} submissions on ${c.key}"></div>`
+    ).join("")}</div>`
+  ).join("");
+
+  return `
+    <div class="heatmap-wrap">
+      <div class="heatmap-months">${monthLabels}</div>
+      <div class="heatmap-grid">${grid}</div>
+    </div>
+    <div class="heatmap-footer">
+      <span>Less</span>
+      <span style="display:flex;gap:3px;align-items:center">
+        <span style="width:12px;height:12px;border-radius:2px;background:var(--border);display:inline-block"></span>
+        <span style="width:12px;height:12px;border-radius:2px;background:#033a16;display:inline-block"></span>
+        <span style="width:12px;height:12px;border-radius:2px;background:#196c2e;display:inline-block"></span>
+        <span style="width:12px;height:12px;border-radius:2px;background:#2ea043;display:inline-block"></span>
+        <span style="width:12px;height:12px;border-radius:2px;background:#56d364;display:inline-block"></span>
+      </span>
+      <span>More</span>
+    </div>
+  `;
+}
+
+// ── Year filter helpers ───────────────────────────────────────────────────
+function countActiveDays(activityByDate, year) {
+  return Object.keys(activityByDate).filter(k => k.startsWith(String(year))).length;
+}
+function countTotalSubmissions(activityByDate, year) {
+  return Object.entries(activityByDate)
+    .filter(([k]) => k.startsWith(String(year)))
+    .reduce((sum, [, v]) => sum + (v.count ?? 0), 0);
+}
+function getBestDay(activityByDate, year) {
+  let best = 0;
+  Object.entries(activityByDate).forEach(([k, v]) => {
+    if (k.startsWith(String(year))) best = Math.max(best, v.count ?? 0);
+  });
+  return best;
+}
+
+function attachYearListeners() {
+  document.querySelectorAll(".year-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      _selectedYear = parseInt(btn.dataset.year);
+
+      // Update active state on buttons
+      document.querySelectorAll(".year-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      // Re-render just the grid and stats
+      document.getElementById("heatmap-inner").innerHTML =
+        renderHeatmapGrid(_activityByDate, _selectedYear);
+
+      document.getElementById("active-days-val").textContent =
+        countActiveDays(_activityByDate, _selectedYear);
+      document.getElementById("total-subs-val").textContent =
+        countTotalSubmissions(_activityByDate, _selectedYear);
+      document.getElementById("best-day-val").textContent =
+        getBestDay(_activityByDate, _selectedYear);
+    });
+  });
+}
+
+// ── Other render helpers ──────────────────────────────────────────────────
 function renderDistribution(buckets) {
   const max = Math.max(...buckets.map(b => b.percentage));
   const bars = buckets.map(b => {
@@ -346,66 +579,6 @@ function renderDistribution(buckets) {
       <div class="sec-label">Leaderboard Distribution</div>
       <div style="font-size:12px;color:var(--text2)">Your bucket is highlighted in green</div>
       <div class="dist-bars">${bars}</div>
-    </div>`;
-}
-
-function renderHeatmap(activityByDate, activeDays) {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const start = new Date(today);
-  start.setDate(start.getDate() - 364 - start.getDay());
-
-  const weeks = [];
-  const cur = new Date(start);
-  while (cur <= today) {
-    const week = [];
-    for (let d = 0; d < 7; d++) {
-      const key    = cur.toISOString().slice(0,10);
-      const count  = activityByDate[key]?.count ?? 0;
-      const level  = count === 0 ? 0 : count <= 3 ? 1 : count <= 10 ? 2 : count <= 20 ? 3 : 4;
-      const future = cur > today;
-      week.push({ key, count, level, future, date: new Date(cur) });
-      cur.setDate(cur.getDate() + 1);
-    }
-    weeks.push(week);
-  }
-
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  let lastM = -1;
-  const monthLabels = weeks.map(w => {
-    const m = w[0].date.getMonth();
-    if (m !== lastM) { lastM = m; return `<span class="month-lbl">${MONTHS[m]}</span>`; }
-    return `<span class="month-lbl"></span>`;
-  }).join("");
-
-  const grid = weeks.map(week =>
-    `<div class="heatmap-week">${week.map(c =>
-      c.future
-        ? `<div class="cell" style="background:transparent"></div>`
-        : `<div class="cell" data-l="${c.level}" data-tip="${c.count} submissions on ${c.key}"></div>`
-    ).join("")}</div>`
-  ).join("");
-
-  return `
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div class="sec-label" style="margin-bottom:0">Submission Activity</div>
-        <div style="font-size:12px;color:var(--text3)">${activeDays} active days</div>
-      </div>
-      <div class="heatmap-wrap">
-        <div class="heatmap-months">${monthLabels}</div>
-        <div class="heatmap-grid">${grid}</div>
-      </div>
-      <div class="heatmap-footer">
-        <span>Less</span>
-        <span style="display:flex;gap:3px;align-items:center">
-          <span style="width:12px;height:12px;border-radius:2px;background:var(--border);display:inline-block"></span>
-          <span style="width:12px;height:12px;border-radius:2px;background:#033a16;display:inline-block"></span>
-          <span style="width:12px;height:12px;border-radius:2px;background:#196c2e;display:inline-block"></span>
-          <span style="width:12px;height:12px;border-radius:2px;background:#2ea043;display:inline-block"></span>
-          <span style="width:12px;height:12px;border-radius:2px;background:#56d364;display:inline-block"></span>
-        </span>
-        <span>More</span>
-      </div>
     </div>`;
 }
 
@@ -454,6 +627,50 @@ function timeAgo(d) {
 }
 
 loadProfile();
+
+// ── Smart heatmap tooltip ─────────────────────────────────────────────────
+(function () {
+  const tip = document.createElement("div");
+  tip.id = "heatmap-tooltip";
+  document.body.appendChild(tip);
+
+  const MARGIN = 10;
+
+  document.addEventListener("mouseover", (e) => {
+    const cell = e.target.closest(".cell[data-tip]");
+    if (!cell) return;
+    tip.textContent = cell.dataset.tip;
+    tip.style.opacity = "1";
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    const cell = e.target.closest(".cell[data-tip]");
+    if (!cell) { tip.style.opacity = "0"; return; }
+
+    const tw = tip.offsetWidth;
+    const th = tip.offsetHeight;
+    const vw = window.innerWidth;
+
+    // Default: above cursor, centered
+    let x = e.clientX - tw / 2;
+    let y = e.clientY - th - MARGIN;
+
+    // Flip below if not enough room above
+    if (y < MARGIN) y = e.clientY + MARGIN + 16;
+
+    // Clamp horizontally — never overflow left or right edge
+    if (x < MARGIN) x = MARGIN;
+    if (x + tw > vw - MARGIN) x = vw - tw - MARGIN;
+
+    tip.style.left = x + "px";
+    tip.style.top  = y + "px";
+  });
+
+  document.addEventListener("mouseout", (e) => {
+    const cell = e.target.closest(".cell[data-tip]");
+    if (cell) tip.style.opacity = "0";
+  });
+})();
 </script>
 </body>
 </html>

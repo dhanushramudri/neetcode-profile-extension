@@ -3,16 +3,29 @@
   "name": "NeetCode Profile Share",
   "version": "1.0.0",
   "description": "Auto-generate a shareable public NeetCode profile for your resume.",
-  "permissions": ["storage", "activeTab", "scripting"],
-  "host_permissions": ["https://neetcode.io/*"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://neetcode.io/*"
+  ],
   "background": {
     "service_worker": "src/background.js"
   },
   "content_scripts": [
     {
       "matches": ["https://neetcode.io/*"],
+      "js": ["src/interceptor.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://neetcode.io/*"],
       "js": ["src/content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start",
+      "world": "ISOLATED"
     }
   ],
   "action": {

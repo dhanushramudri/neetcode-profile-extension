@@ -1,89 +1,57 @@
 // content.js — NeetCode Profile Share
-// Intercepts NeetCode's own fetch() calls silently on every page visit.
-// Handles Angular SPA navigation (no full page reloads).
+// Runs in ISOLATED world. Listens for events dispatched by interceptor.js (MAIN world).
 
 (function () {
-  const BACKEND = "https://neetcode-profile-extension.vercel.app"; // ← update after deploy
+  const BACKEND = "https://neetcode-profile-extension.vercel.app";
 
+  // ── Step 1 is handled by interceptor.js in MAIN world ────────────────────
+
+  // ── Step 2: Listen for captured data via custom events ────────────────────
   const captured = {
-    userInfo:    null,
-    userStats:   null,
-    streakData:  null,
-    leaderboard: null,
-  };
-
-  const FUNCTION_MAP = {
-    getUserInfo:         "userInfo",
-    getUserStats:        "userStats",
-    getUserStreakData:   "streakData",
-    getLeaderboardData:  "leaderboard",
+    userInfo: null, userStats: null, streakData: null, leaderboard: null
   };
 
   let debounceTimer = null;
 
-  // ── Wrap window.fetch to intercept NeetCode API responses ─────────────────
-  const originalFetch = window.fetch;
+  window.addEventListener("__neetcode_capture__", (e) => {
+    const { key, data } = e.detail;
+    captured[key] = data;
 
-  window.fetch = async function (...args) {
-    const response = await originalFetch.apply(this, args);
+    console.log("[NeetCode Profile Share] 📨 Received from page:", key);
 
-    try {
-      const url = (typeof args[0] === "string" ? args[0] : args[0]?.url) || "";
-      if (url.includes("callableFunctionHttp")) {
-        const clone   = response.clone();
-        const reqBody = args[1]?.body;
+    // Save to extension storage immediately
+    chrome.storage.local.set({
+      neetcodeProfile: { capturedAt: new Date().toISOString(), ...captured },
+      lastUpdated: new Date().toISOString(),
+    });
 
-        clone.json().then((json) => {
-          try {
-            const parsed = typeof reqBody === "string" ? JSON.parse(reqBody) : reqBody;
-            const fnId   = parsed?.functionId;
-            const key    = FUNCTION_MAP[fnId];
-            if (key && json?.data) {
-              captured[key] = json.data;
-              console.log(`[NeetCode Profile Share] ✅ Captured: ${fnId}`);
-              scheduleSync();
-            }
-          } catch (_) {}
-        }).catch(() => {});
-      }
-    } catch (_) {}
+    // Notify popup
+    chrome.runtime.sendMessage({
+      type: "DATA_UPDATE",
+      payload: { capturedAt: new Date().toISOString(), ...captured }
+    }).catch(() => {});
 
-    return response;
-  };
-
-  // ── Debounce: batch all 4 API calls into one backend push ─────────────────
-  function scheduleSync() {
+    // Debounced backend push
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      const payload = { capturedAt: new Date().toISOString(), ...captured };
-
-      // Cache for popup
-      chrome.storage.local.set({
-        neetcodeProfile: payload,
-        lastUpdated: new Date().toISOString(),
-      });
-
-      // Notify popup if open
-      chrome.runtime.sendMessage({ type: "DATA_UPDATE", payload }).catch(() => {});
-
-      // Auto push to backend if user already published
       const allReady = captured.userInfo && captured.userStats &&
                        captured.streakData && captured.leaderboard;
       if (allReady) {
         chrome.storage.local.get(["savedUsername", "published"], (s) => {
           if (s.published && s.savedUsername) {
-            silentPush(s.savedUsername, payload);
+            silentPush(s.savedUsername, captured);
           }
         });
       }
     }, 800);
-  }
+  });
 
-  // ── Push data to backend silently ─────────────────────────────────────────
-  async function silentPush(username, payload) {
-    const { userInfo, userStats, streakData, leaderboard } = payload;
+  // ── Step 3: Push to backend ───────────────────────────────────────────────
+  async function silentPush(username, data) {
+    const { userInfo, userStats, streakData, leaderboard } = data;
+    console.log("[NeetCode Profile Share] 📤 Pushing to backend...");
     try {
-      const res = await originalFetch(`${BACKEND}/api/profile`, {
+      const res = await fetch(`${BACKEND}/api/profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -106,39 +74,35 @@
           updatedAt:          new Date().toISOString(),
         }),
       });
-
       if (res.ok) {
         const now = new Date().toISOString();
         chrome.storage.local.set({ lastSynced: now });
         chrome.runtime.sendMessage({ type: "SYNC_OK", ts: now }).catch(() => {});
-        console.log("[NeetCode Profile Share] ✅ Synced silently");
+        console.log("[NeetCode Profile Share] ✅ Synced to backend!");
+      } else {
+        console.warn("[NeetCode Profile Share] ⚠️ Backend returned:", res.status);
       }
     } catch (e) {
       console.warn("[NeetCode Profile Share] ⚠️ Sync failed:", e.message);
     }
   }
 
-  // ── Watch for Angular SPA route changes ───────────────────────────────────
-  let lastUrl = location.href;
-  new MutationObserver(() => {
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      console.log(`[NeetCode Profile Share] 📍 Route changed: ${location.pathname}`);
-      // fetch() intercept handles re-capture automatically
-    }
-  }).observe(document.body, { childList: true, subtree: true });
-
-  // ── Respond to popup messages ─────────────────────────────────────────────
+  // ── Step 4: Respond to popup ──────────────────────────────────────────────
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === "GET_CAPTURED_DATA") {
+      console.log("[NeetCode Profile Share] 📡 Popup requested data:", JSON.stringify({
+        hasUserInfo: !!captured.userInfo,
+        hasUserStats: !!captured.userStats,
+        hasStreakData: !!captured.streakData,
+        hasLeaderboard: !!captured.leaderboard,
+      }));
       sendResponse({ payload: { capturedAt: new Date().toISOString(), ...captured } });
     }
     if (msg.type === "MANUAL_PUSH") {
-      silentPush(msg.username, { capturedAt: new Date().toISOString(), ...captured })
-        .then(() => sendResponse({ ok: true }));
+      silentPush(msg.username, captured).then(() => sendResponse({ ok: true }));
       return true;
     }
   });
 
-  console.log("[NeetCode Profile Share] 👀 Watching NeetCode API silently...");
+  console.log("[NeetCode Profile Share] 👀 Content script ready (document_start)");
 })();
