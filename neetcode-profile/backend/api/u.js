@@ -288,7 +288,9 @@ function renderHeatmapGrid(activity, year) {
   while (cur <= end) {
     const week = [];
     for (let d = 0; d < 7; d++) {
-      const key     = cur.toISOString().slice(0, 10);
+      const key = cur.getFullYear() + "-" +
+        String(cur.getMonth() + 1).padStart(2, "0") + "-" +
+        String(cur.getDate()).padStart(2, "0"); 
       const inRange = isCur ? cur <= today : parseInt(key.slice(0,4)) === year;
       const count   = inRange ? (activity[key]?.count ?? 0) : 0;
       const level   = count===0?0:count<=3?1:count<=10?2:count<=20?3:4;
