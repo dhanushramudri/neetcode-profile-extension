@@ -2,7 +2,7 @@
 // Runs in ISOLATED world. Listens for events dispatched by interceptor.js (MAIN world).
 
 (function () {
-  const BACKEND = "https://ncprofile.dev";
+  const BACKEND = "https://neetcard.vercel.app";
 
   // ── Step 1 is handled by interceptor.js in MAIN world ────────────────────
 

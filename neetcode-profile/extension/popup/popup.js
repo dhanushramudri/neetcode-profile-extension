@@ -1,6 +1,6 @@
 // popup.js — NeetCode Profile Share
 
-const BACKEND = "https://ncprofile.dev";
+const BACKEND = "https://neetcard.vercel.app";
 const $ = (id) => document.getElementById(id);
 
 const log = (...args) => console.log("[NeetCode Popup]", ...args);
