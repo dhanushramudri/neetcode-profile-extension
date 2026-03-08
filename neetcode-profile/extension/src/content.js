@@ -3,7 +3,7 @@
 // Handles Angular SPA navigation (no full page reloads).
 
 (function () {
-  const BACKEND = "https://neetcode-profile.vercel.app"; // ← update after deploy
+  const BACKEND = "https://neetcode-profile-extension.vercel.app"; // ← update after deploy
 
   const captured = {
     userInfo:    null,
