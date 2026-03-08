@@ -13,6 +13,7 @@ Get a shareable public profile URL for your NeetCode account — paste it in you
 1. Clone this repo
    ```
    git clone https://github.com/dhanushramnudri/neetcard.git
+   cd neetcode-profile
    ```
 
 2. Open Chrome and go to `chrome://extensions`
