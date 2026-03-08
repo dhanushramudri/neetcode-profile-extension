@@ -49,6 +49,7 @@
   maybeAutoSync();
 
   // SPA navigation support: re-check whenever the URL changes
+  // Must wait for document.body to exist before observing
   let lastHref = window.location.href;
   const navObserver = new MutationObserver(() => {
     if (window.location.href !== lastHref) {
@@ -57,7 +58,17 @@
       maybeAutoSync();
     }
   });
-  navObserver.observe(document.body, { childList: true, subtree: true });
+
+  function startObserver() {
+    if (document.body) {
+      navObserver.observe(document.body, { childList: true, subtree: true });
+    } else {
+      document.addEventListener("DOMContentLoaded", () => {
+        navObserver.observe(document.body, { childList: true, subtree: true });
+      });
+    }
+  }
+  startObserver();
 
   // ── Interceptor event listener ────────────────────────────────────────────
   window.addEventListener("__neetcode_capture__", (e) => {
