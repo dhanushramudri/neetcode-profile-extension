@@ -9,7 +9,57 @@
   };
 
   let debounceTimer = null;
+  let autoSyncFired = false;  // prevent duplicate auto-syncs per page load
 
+  // ── Auto-sync when user visits /profile ──────────────────────────────────
+  function maybeAutoSync() {
+    if (autoSyncFired) return;
+    if (!window.location.href.includes("/profile")) return;
+
+    chrome.storage.local.get(["published", "neetcodeProfile"], (s) => {
+      if (!s.published) return;
+
+      // Seed captured state from storage so we can push even if
+      // interceptor events haven't fired yet this page load.
+      if (s.neetcodeProfile) {
+        if (!captured.userInfo)    captured.userInfo    = s.neetcodeProfile.userInfo;
+        if (!captured.userStats)   captured.userStats   = s.neetcodeProfile.userStats;
+        if (!captured.streakData)  captured.streakData  = s.neetcodeProfile.streakData;
+        if (!captured.leaderboard) captured.leaderboard = s.neetcodeProfile.leaderboard;
+      }
+
+      const allReady = captured.userInfo && captured.userStats &&
+                       captured.streakData && captured.leaderboard;
+
+      if (allReady) {
+        const profileUsername = getProfileUsername(captured);
+        if (profileUsername) {
+          autoSyncFired = true;
+          console.log("[NeetCode Profile Share] 🔄 Auto-syncing on profile page visit…");
+          silentPush(profileUsername, captured);
+        }
+      } else {
+        // Data not ready yet — wait for interceptor events to fill it in
+        console.log("[NeetCode Profile Share] ⏳ Waiting for full data before auto-sync…");
+      }
+    });
+  }
+
+  // Run immediately if already on /profile, and also watch for SPA navigation
+  maybeAutoSync();
+
+  // SPA navigation support: re-check whenever the URL changes
+  let lastHref = window.location.href;
+  const navObserver = new MutationObserver(() => {
+    if (window.location.href !== lastHref) {
+      lastHref = window.location.href;
+      autoSyncFired = false;   // reset so next /profile visit triggers again
+      maybeAutoSync();
+    }
+  });
+  navObserver.observe(document.body, { childList: true, subtree: true });
+
+  // ── Interceptor event listener ────────────────────────────────────────────
   window.addEventListener("__neetcode_capture__", (e) => {
     const { key, data } = e.detail;
     captured[key] = data;
@@ -34,11 +84,9 @@
       if (allReady) {
         chrome.storage.local.get(["published"], (s) => {
           if (s.published) {
-            // Always derive username from the actual NeetCode profile data —
-            // never from a user-typed field. This prevents anyone from
-            // publishing under a username that isn't theirs.
             const profileUsername = getProfileUsername(captured);
             if (profileUsername) {
+              autoSyncFired = true;  // mark so we don't double-sync
               silentPush(profileUsername, captured);
             } else {
               console.warn("[NeetCode Profile Share] ⚠️ Could not determine profile username from captured data.");
@@ -49,7 +97,6 @@
     }, 800);
   });
 
-  /**
   /**
    * Derives username from the displayName shown in the popup "Signed In As" section.
    * Removes spaces, lowercases, strips chars invalid for the backend regex.
@@ -70,7 +117,6 @@
     const { userInfo, userStats, streakData, leaderboard } = data;
     console.log("[NeetCode Profile Share] 📤 Pushing as:", username);
 
-    // Load the stored token for this username (may be undefined for new profiles)
     const tokenKey = `ownerToken_${username}`;
     chrome.storage.local.get([tokenKey], async (stored) => {
       const ownerToken = stored[tokenKey] || undefined;
@@ -81,7 +127,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             username,
-            ownerToken,                          // undefined on first push → backend creates profile
+            ownerToken,
             displayName:        userInfo?.displayName,
             photoURL:           userInfo?.photoURL,
             country:            userInfo?.country,
@@ -106,8 +152,6 @@
         if (res.ok) {
           const now = new Date().toISOString();
 
-          // If the server returned a token (new profile or legacy migration),
-          // persist it immediately so future pushes are authenticated.
           if (json.ownerToken) {
             chrome.storage.local.set({ [tokenKey]: json.ownerToken });
             console.log("[NeetCode Profile Share] 🔑 Owner token saved for:", username);
@@ -118,7 +162,6 @@
           console.log("[NeetCode Profile Share] ✅ Synced to backend!");
 
         } else if (res.status === 403) {
-          // Username is owned by someone else — surface this clearly
           console.error(
             "[NeetCode Profile Share] 🚫 Username taken by another account:",
             username,
