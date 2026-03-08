@@ -1,4 +1,4 @@
-# NeetCode Profile Share
+# 🚀 NeetCode Profile Share
 
 Get a shareable public profile URL for your NeetCode account — paste it in your resume, bio, or anywhere you want to show your progress.
 
