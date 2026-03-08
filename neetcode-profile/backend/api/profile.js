@@ -61,16 +61,48 @@ export default async function handler(req, res) {
     }
     const existing = await checkRes.json();
 
-    // ── USERNAME ALREADY TAKEN ──────────────────────────────────────────────
+    // ── USERNAME ALREADY EXISTS ─────────────────────────────────────────────
     if (existing.length > 0) {
       const storedToken = existing[0].owner_token;
 
-      // Require the correct owner token to update
+      // ── LEGACY PROFILE: no token was assigned yet (created before token system) ──
+      // Accept the update and assign a fresh token, returned to the caller once.
+      if (!storedToken) {
+        const freshToken = generateToken();
+        const row = buildRow(lowerUsername, body, freshToken);
+
+        const r = await dbFetch(
+          `profiles?username=eq.${encodeURIComponent(lowerUsername)}`,
+          {
+            method: "PATCH",
+            headers: { "Prefer": "return=minimal" },
+            body: JSON.stringify(row),
+          }
+        );
+
+        if (!r.ok) {
+          const err = await r.text();
+          console.error("Supabase legacy-update error:", err);
+          return res.status(500).json({ error: "Database error", detail: err });
+        }
+
+        // Return the newly assigned token so the extension can save it
+        return res.status(200).json({
+          ok: true,
+          username: lowerUsername,
+          ownerToken: freshToken,
+          message:
+            "Profile migrated to token-based ownership. " +
+            "Save your ownerToken — it is required for future updates and will not be shown again.",
+        });
+      }
+
+      // ── PROTECTED PROFILE: require correct token ────────────────────────────
       if (!ownerToken || ownerToken !== storedToken) {
         return res.status(403).json({
           error: "Username already taken",
           message:
-            "This username is already registered. " +
+            "This username is already registered by another user. " +
             "Supply the correct ownerToken to update your own profile.",
         });
       }
@@ -93,7 +125,7 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "Database error", detail: err });
       }
 
-      // On updates we do NOT return the token again (owner already has it)
+      // On normal updates do NOT return the token again (owner already has it)
       return res.status(200).json({ ok: true, username: lowerUsername });
     }
 
