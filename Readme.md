@@ -10,7 +10,7 @@ Get a shareable public profile URL for your NeetCode account — paste it in you
 
 1. Clone this repo
    ```
-   git clone https://github.com/dhanushramnudri/neetcard.git
+   git clone https://github.com/dhanushramudri/neetcard.git
    cd neetcode-profile
    ```
 
@@ -40,4 +40,4 @@ Get a shareable public profile URL for your NeetCode account — paste it in you
 
 ---
 
-Made with 🤍 by [dhanushramnudri](https://github.com/dhanushramnudri)
+Made with 🤍 by [dhanushramudri](https://github.com/dhanushramudri)
