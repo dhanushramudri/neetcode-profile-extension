@@ -1,9 +1,10 @@
-// popup.js — NeetCode Profile Share (production)
+// popup.js — NeetCode Profile Share
 
 const BACKEND = "https://neetcard.vercel.app";
 const $ = (id) => document.getElementById(id);
 
-let profilePayload = null;
+let profilePayload  = null;
+let lockedUsername  = null;   // derived from NeetCode API — never user-typed
 
 async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -36,30 +37,47 @@ async function init() {
     }
   }
 
-  // Restore saved username, link, and last sync time
-  const stored = await chrome.storage.local.get(["savedUsername", "published", "lastSynced"]);
+  // Restore published link and last sync time
+  const stored = await chrome.storage.local.get(["savedUsername", "published", "lastSynced", "syncError"]);
 
-  if (stored.savedUsername) {
-    $("usernameInput").value  = stored.savedUsername;
-    $("publishBtn").disabled  = false;
-  }
   if (stored.published && stored.savedUsername) {
     showLink(stored.savedUsername);
   }
   if (stored.lastSynced) {
     showSyncTime(stored.lastSynced);
   }
+  // Show any persisted sync error (e.g. 403 from a previous session)
+  if (stored.syncError) {
+    showError(stored.syncError);
+  }
 
-  // Listen for live updates from content script
+  // Live updates from content script
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "DATA_UPDATE" && msg.payload) {
       profilePayload = msg.payload;
       renderProfile(profilePayload);
     }
     if (msg.type === "SYNC_OK") {
+      hideError();
       showSyncTime(msg.ts || new Date().toISOString());
     }
+    if (msg.type === "SYNC_ERROR" && msg.code === 403) {
+      showError(msg.message);
+    }
   });
+}
+
+// ── Derive username from the display name shown in "Signed In As" ────────────
+// Remove spaces, lowercase, strip invalid chars — same as what the user sees.
+function getProfileUsername(data) {
+  const raw = data?.userInfo?.displayName || null;
+  if (!raw) return null;
+  const sanitised = raw
+    .replace(/\s+/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    .slice(0, 30);
+  return sanitised.length >= 2 ? sanitised : null;
 }
 
 function renderProfile(data) {
@@ -79,18 +97,21 @@ function renderProfile(data) {
   );
   $("statusHint").textContent = "";
 
+  // ── Profile card ────────────────────────────────────────────────────────
   if (userInfo) {
     $("profileSection").style.display = "block";
     $("profileName").textContent      = userInfo.displayName || "—";
     const year = userInfo.joined ? new Date(userInfo.joined).getFullYear() : "—";
-    $("profileMeta").textContent = `${userInfo.country || ""} · Joined ${year}`;
+    $("profileMeta").textContent = `${userInfo.country || ""} · Joined ${year}`.trim().replace(/^·\s*/, "");
+
     if (userInfo.photoURL) {
-      $("avatarImg").src                    = userInfo.photoURL;
-      $("avatarImg").style.display          = "block";
-      $("avatarPlaceholder").style.display  = "none";
+      $("avatarImg").src                   = userInfo.photoURL;
+      $("avatarImg").style.display         = "block";
+      $("avatarPlaceholder").style.display = "none";
     }
   }
 
+  // ── Stats ────────────────────────────────────────────────────────────────
   if (userStats || leaderboard) {
     $("statsSection").style.display     = "block";
     const solved  = userStats?.problems?.NeetCode150?.completed ?? leaderboard?.userSolvedCount ?? 0;
@@ -101,22 +122,22 @@ function renderProfile(data) {
     $("statStreak").textContent     = streak + " 🔥";
   }
 
-  // Auto-populate username from displayName if not already saved
-  chrome.storage.local.get(["savedUsername"], (stored) => {
-    if (!stored.savedUsername && userInfo?.displayName) {
-      const suggested = userInfo.displayName
-        .toLowerCase()
-        .replace(/\s+/g, "")
-        .replace(/[^a-z0-9_-]/g, "")
-        .slice(0, 30);
-      if (suggested.length >= 2) {
-        $("usernameInput").value = suggested;
-        $("publishBtn").disabled = false;
-      }
-    }
-  });
-
-  $("publishBtn").disabled = false;
+  // ── Lock username to NeetCode profile ────────────────────────────────────
+  const username = getProfileUsername(data);
+  if (username) {
+    lockedUsername = username;
+    const display  = $("usernameDisplay");
+    display.textContent  = username;
+    display.classList.remove("placeholder");
+    $("usernameBadge").style.display = "inline-block";
+    $("publishBtn").disabled         = false;
+  } else {
+    // Username not yet available — keep button disabled
+    $("usernameDisplay").textContent = "Waiting for profile data…";
+    $("usernameDisplay").classList.add("placeholder");
+    $("usernameBadge").style.display = "none";
+    $("publishBtn").disabled         = true;
+  }
 }
 
 function setStatus(type, html) {
@@ -151,10 +172,11 @@ function showLink(username) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     if (tab?.url?.includes("neetcode.io") && profilePayload) {
-      chrome.tabs.sendMessage(tab.id, { type: "MANUAL_PUSH", username }, (r) => {
+      // MANUAL_PUSH — content.js will derive username from captured data itself
+      chrome.tabs.sendMessage(tab.id, { type: "MANUAL_PUSH" }, (r) => {
         $("syncBtn").textContent = r?.ok ? "✅" : "⚠️";
         setTimeout(() => ($("syncBtn").textContent = "🔄 Sync"), 2000);
-        showSyncTime(new Date().toISOString());
+        if (r?.ok) showSyncTime(new Date().toISOString());
       });
     } else {
       $("syncBtn").textContent = "⚠️";
@@ -163,24 +185,38 @@ function showLink(username) {
   };
 }
 
-$("usernameInput").addEventListener("input", () => {
-  const v = $("usernameInput").value.replace(/[^a-z0-9_-]/gi, "").toLowerCase();
-  $("usernameInput").value = v;
-  $("publishBtn").disabled = v.length < 2 || !profilePayload;
-});
+function showError(message) {
+  $("errorBox").style.display = "block";
+  $("errorMsg").textContent   = message;
+  $("publishHint").textContent = "";
+  setStatus("err", "<strong>Username conflict</strong>");
+}
 
+function hideError() {
+  $("errorBox").style.display  = "none";
+  $("errorMsg").textContent    = "";
+  chrome.storage.local.remove("syncError");
+}
+
+// ── Publish button ────────────────────────────────────────────────────────────
 $("publishBtn").addEventListener("click", async () => {
-  const username = $("usernameInput").value.trim();
-  if (!username || !profilePayload) return;
+  if (!lockedUsername || !profilePayload) return;
 
-  $("publishBtn").disabled    = true;
-  $("publishBtn").textContent = "Publishing…";
+  hideError();
+  $("publishBtn").disabled     = true;
+  $("publishBtn").textContent  = "Publishing…";
   $("publishHint").textContent = "";
 
   const { userInfo, userStats, streakData, leaderboard } = profilePayload;
 
+  // Load stored token for this username (undefined = new profile)
+  const tokenKey   = `ownerToken_${lockedUsername}`;
+  const stored     = await chrome.storage.local.get([tokenKey]);
+  const ownerToken = stored[tokenKey] || undefined;
+
   const body = {
-    username,
+    username:           lockedUsername,
+    ownerToken,                                   // may be undefined on first publish
     displayName:        userInfo?.displayName,
     photoURL:           userInfo?.photoURL,
     country:            userInfo?.country,
@@ -200,25 +236,48 @@ $("publishBtn").addEventListener("click", async () => {
   };
 
   try {
-    const res = await fetch(`${BACKEND}/api/profile`, {
+    const res  = await fetch(`${BACKEND}/api/profile`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(body),
     });
 
-    if (!res.ok) throw new Error(`${res.status}`);
+    const json = await res.json().catch(() => ({}));
 
-    await chrome.storage.local.set({ savedUsername: username, published: true });
-    showLink(username);
-    showSyncTime(new Date().toISOString());
-    $("publishBtn").textContent = "✅ Published!";
+    if (res.ok) {
+      // Persist token if server issued one (new profile or legacy migration)
+      if (json.ownerToken) {
+        await chrome.storage.local.set({ [tokenKey]: json.ownerToken });
+      }
+
+      await chrome.storage.local.set({ savedUsername: lockedUsername, published: true });
+      showLink(lockedUsername);
+      showSyncTime(new Date().toISOString());
+      $("publishBtn").textContent = "✅ Published!";
+
+    } else if (res.status === 403) {
+      // Username belongs to a different NeetCode account
+      const msg = `⛔ This username is already registered by another account. ` +
+                  `Your NeetCode username "${lockedUsername}" cannot be used — ` +
+                  `it may already be taken. Contact support if you believe this is an error.`;
+      showError(msg);
+      $("publishBtn").disabled    = false;
+      $("publishBtn").textContent = "🚀 Generate Public Profile";
+
+    } else {
+      // Generic server error — still show the link locally
+      await chrome.storage.local.set({ savedUsername: lockedUsername, published: true });
+      showLink(lockedUsername);
+      $("publishBtn").textContent  = "✅ Preview Ready";
+      $("publishHint").textContent = "⚠️ Sync failed — will retry on next visit.";
+    }
 
   } catch (e) {
-    // Still save locally and show link even if backend is unreachable
-    await chrome.storage.local.set({ savedUsername: username, published: true });
-    showLink(username);
+    // Network error — still show the link locally
+    await chrome.storage.local.set({ savedUsername: lockedUsername, published: true });
+    showLink(lockedUsername);
     $("publishBtn").textContent  = "✅ Preview Ready";
-    $("publishHint").textContent = "⚠️ Sync failed — will retry on next visit.";
+    $("publishHint").textContent = "⚠️ Offline — will retry on next visit.";
   }
 });
 

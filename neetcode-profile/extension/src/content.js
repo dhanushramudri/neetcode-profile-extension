@@ -50,21 +50,18 @@
   });
 
   /**
-   * Derives the canonical username from captured NeetCode data.
-   * Priority: userInfo.username → userInfo.displayName (lowercased, sanitised)
-   * Returns null if nothing usable is found.
+  /**
+   * Derives username from the displayName shown in the popup "Signed In As" section.
+   * Removes spaces, lowercases, strips chars invalid for the backend regex.
    */
   function getProfileUsername(data) {
-    const raw =
-      data.userInfo?.username ||
-      data.userInfo?.handle   ||
-      data.userInfo?.slug     ||
-      null;
-
+    const raw = data.userInfo?.displayName || null;
     if (!raw) return null;
-
-    // Sanitise to match the backend validation regex: ^[a-z0-9_-]{2,30}$
-    const sanitised = raw.toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 30);
+    const sanitised = raw
+      .replace(/\s+/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "")
+      .slice(0, 30);
     return sanitised.length >= 2 ? sanitised : null;
   }
 

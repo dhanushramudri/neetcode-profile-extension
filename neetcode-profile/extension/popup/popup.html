@@ -54,6 +54,7 @@
     .status-text { font-size: 13px; color: #8890b0; }
     .status-text strong { color: #e8eaf0; }
     .status-hint { font-size: 11px; color: #3a4060; margin-top: 6px; }
+    .status-hint.err { color: #f87171; }
 
     /* Profile row */
     .profile-row { display: flex; align-items: center; gap: 12px; }
@@ -83,17 +84,54 @@
     .stat-num.orange { color: #f5a623; }
     .stat-lbl { font-size: 10px; color: #3a4060; margin-top: 4px; }
 
-    /* Input */
-    input {
-      width: 100%;
-      background: #141720; border: 1px solid #1e2235;
-      border-radius: 8px; padding: 9px 12px;
-      font-size: 13px; color: #e8eaf0;
-      font-family: 'IBM Plex Mono', monospace;
-      outline: none; transition: border .2s;
+    /* Username display — locked, not editable */
+    .username-box {
+      background: #141720;
+      border: 1px solid #1e2235;
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    input:focus { border-color: #627eff; }
-    input::placeholder { color: #2a2f45; }
+    .username-lock { font-size: 14px; flex-shrink: 0; }
+    .username-value {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      color: #e8eaf0;
+      flex: 1;
+    }
+    .username-value.placeholder { color: #2a2f45; }
+    .username-badge {
+      font-size: 9px;
+      background: #0d1a10;
+      color: #00d4aa;
+      border: 1px solid #00d4aa33;
+      padding: 2px 7px;
+      border-radius: 20px;
+      flex-shrink: 0;
+    }
+    .username-note {
+      font-size: 11px;
+      color: #3a4060;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    /* Error box */
+    .error-box {
+      background: #1a0d0d;
+      border: 1px solid #4a1a1a;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-top: 10px;
+      display: none;
+    }
+    .error-box p {
+      font-size: 12px;
+      color: #f87171;
+      line-height: 1.6;
+    }
 
     /* Buttons */
     .btn {
@@ -105,7 +143,7 @@
     .btn-primary {
       background: linear-gradient(135deg, #00d4aa, #627eff);
       color: #0f1117; width: 100%; padding: 11px;
-      margin-top: 8px; font-size: 14px;
+      margin-top: 10px; font-size: 14px;
     }
     .btn-primary:hover   { opacity: .9; transform: translateY(-1px); }
     .btn-primary:disabled { opacity: .3; cursor: not-allowed; transform: none; }
@@ -139,15 +177,6 @@
     /* Footer */
     .footer { padding: 10px 18px; text-align: center; }
     .footer-text { font-size: 10px; color: #2a2f45; font-family: 'IBM Plex Mono', monospace; }
-
-    /* Sync badge */
-    .sync-badge {
-      display: inline-block;
-      background: #0d1a10; color: #00d4aa;
-      border: 1px solid #00d4aa33;
-      font-size: 10px; padding: 2px 8px; border-radius: 20px;
-      margin-top: 6px;
-    }
   </style>
 </head>
 <body>
@@ -221,10 +250,26 @@
     </div>
   </div>
 
-  <!-- Username & publish -->
+  <!-- Username — locked to NeetCode profile username -->
   <div class="section">
     <div class="label">Your Public Username</div>
-    <input type="text" id="usernameInput" placeholder="e.g. dhanush" maxlength="30"/>
+
+    <!-- Locked username display -->
+    <div class="username-box">
+      <span class="username-lock">🔒</span>
+      <span class="username-value placeholder" id="usernameDisplay">Waiting for profile data…</span>
+      <span class="username-badge" id="usernameBadge" style="display:none">NeetCode</span>
+    </div>
+    <p class="username-note">
+      Your username is automatically set from your NeetCode account and cannot be changed.
+      Each NeetCode account gets exactly one profile page.
+    </p>
+
+    <!-- Error shown when username is taken by a different account -->
+    <div class="error-box" id="errorBox">
+      <p id="errorMsg"></p>
+    </div>
+
     <button class="btn btn-primary" id="publishBtn" disabled>🚀 Generate Public Profile</button>
     <div class="status-hint" id="publishHint"></div>
   </div>
