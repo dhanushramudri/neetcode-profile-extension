@@ -2,6 +2,6 @@
   "version": 2,
   "rewrites": [
     { "source": "/api/profile/:username", "destination": "/api/profile?username=:username" },
-    { "source": "/u/:username", "destination": "/public/profile.html" }
+    { "source": "/u/:username", "destination": "/api/u?username=:username" }
   ]
 }
