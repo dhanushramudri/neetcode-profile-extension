@@ -1,7 +1,7 @@
 // api/u.js — serves the public profile page for /u/:username
 export default async function handler(req, res) {
   const username = req.query.username || "";
-  const pageUrl  = `https://neetcode-profile-extension.vercel.app/u/${username}`;
+  const pageUrl  = `https://ncprofile.dev/u/${username}`;
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.status(200).send(`<!DOCTYPE html>
@@ -157,7 +157,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 </div>
 <div id="hm-tip"></div>
 <script>
-const BACKEND  = "https://neetcode-profile-extension.vercel.app";
+const BACKEND  = "https://ncprofile.dev";
 const USERNAME = "${username}";
 const PAGE_URL = "${pageUrl}";
 
