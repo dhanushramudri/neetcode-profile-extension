@@ -1,6 +1,4 @@
 // api/u.js — serves the public profile page for /u/:username
-// This avoids static file routing issues with Vercel
-
 export default async function handler(req, res) {
   const username = req.query.username || "";
 
@@ -53,16 +51,29 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 .dist-bar{width:100%;border-radius:4px 4px 0 0;background:var(--bg3);min-height:4px}
 .dist-bar.me{background:linear-gradient(180deg,var(--blue),var(--green))}
 .dist-pct{font-size:9px;color:var(--text3)}.dist-lbl{font-size:9px;color:var(--text3);white-space:nowrap}
+
+/* ── Heatmap ── */
+.heatmap-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.year-filter{display:flex;gap:6px;flex-wrap:wrap}
+.year-btn{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;transition:all 0.15s ease;letter-spacing:0.5px}
+.year-btn:hover{border-color:var(--blue);color:var(--blue)}
+.year-btn.active{background:var(--blue);border-color:var(--blue);color:#fff}
 .heatmap-wrap{overflow-x:auto}
 .heatmap-months{display:flex;gap:3px;margin-bottom:4px}
 .month-lbl{font-size:9px;color:var(--text3);flex:1}
 .heatmap-grid{display:flex;gap:3px}
 .heatmap-week{display:flex;flex-direction:column;gap:3px}
-.cell{width:12px;height:12px;border-radius:2px;background:var(--border);cursor:default;position:relative}
+.cell{width:12px;height:12px;border-radius:2px;background:var(--border);cursor:default}
 .cell[data-l="1"]{background:#033a16}.cell[data-l="2"]{background:#196c2e}.cell[data-l="3"]{background:#2ea043}.cell[data-l="4"]{background:#56d364}
-.cell:hover::after{content:attr(data-tip);position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:#1a1f35;border:1px solid var(--border);color:var(--text);font-size:10px;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:10;font-family:'Inter',sans-serif}
-.heatmap-footer{display:flex;justify-content:space-between;margin-top:8px}
+.heatmap-footer{display:flex;justify-content:space-between;margin-top:8px;align-items:center}
 .heatmap-footer span{font-size:11px;color:var(--text3)}
+.year-stats{display:flex;gap:20px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.year-stat-val{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:var(--green)}
+.year-stat-lbl{font-size:10px;color:var(--text3);margin-top:2px}
+
+/* ── Smart tooltip ── */
+#hm-tip{position:fixed;background:#1a1f35;border:1px solid var(--border);color:var(--text);font-size:11px;font-family:'Inter',sans-serif;padding:5px 10px;border-radius:7px;white-space:nowrap;pointer-events:none;z-index:9999;opacity:0;transition:opacity 0.1s ease;box-shadow:0 4px 16px rgba(0,0,0,0.4)}
+
 .courses-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .course-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
 .course-name{font-size:13px;font-weight:500;margin-bottom:8px}
@@ -78,20 +89,25 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 .error-msg{font-size:20px;color:var(--text2)}
 .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}.courses-grid{grid-template-columns:1fr}.banner{flex-direction:column;text-align:center}.banner-meta{justify-content:center}.banner-right{text-align:center}}
+@media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}.courses-grid{grid-template-columns:1fr}.banner{flex-direction:column;text-align:center}.banner-meta{justify-content:center}.banner-right{text-align:center}.heatmap-header{flex-direction:column;align-items:flex-start}}
 </style>
 </head>
 <body>
 <div class="page" id="root">
   <div class="center-page"><div class="spinner"></div></div>
 </div>
+<div id="hm-tip"></div>
 <script>
 const BACKEND = "https://neetcode-profile-extension.vercel.app";
 const USERNAME = "${username}";
 
+// ── Global heatmap state ──────────────────────────────────────────────────
+let _activity = {};
+let _selectedYear = null;
+
 async function loadProfile() {
   if (!USERNAME) { renderError("404","Profile not found","No username in URL."); return; }
-  document.title = "@" + USERNAME + " — NeetCode Profile";
+  document.title = "@" + USERNAME + " \u2014 NeetCode Profile";
   let data;
   try {
     const res = await fetch(BACKEND + "/api/profile/" + USERNAME);
@@ -108,9 +124,12 @@ function render(d) {
   const topPct = d.percentile ? (100 - d.percentile).toFixed(1) : null;
   const pct150 = Math.min(100, Math.round((d.solved / 150) * 100));
   const pctTotal = Math.min(100, Math.round((d.solved / (d.totalProblems || 533)) * 100));
-  const joinYear = d.joined ? new Date(d.joined).getFullYear() : "—";
+  const joinYear = d.joined ? new Date(d.joined).getFullYear() : "\u2014";
   const ago = d.updatedAt ? timeAgo(new Date(d.updatedAt)) : "";
-  const activeDays = d.activityByDate ? Object.keys(d.activityByDate).length : 0;
+
+  _activity = d.activityByDate || {};
+  const allYears = getYears(_activity);
+  _selectedYear = allYears[allYears.length - 1] ?? new Date().getFullYear();
 
   document.getElementById("root").innerHTML = \`
     <div class="banner">
@@ -128,7 +147,7 @@ function render(d) {
     </div>
     <div class="stats-row">
       <div class="stat-card"><div class="stat-val green">\${d.solved}</div><div class="stat-lbl">Problems Solved</div></div>
-      <div class="stat-card"><div class="stat-val blue">\${topPct ? "Top "+topPct+"%" : "—"}</div><div class="stat-lbl">Global Rank</div></div>
+      <div class="stat-card"><div class="stat-val blue">\${topPct ? "Top "+topPct+"%" : "\u2014"}</div><div class="stat-lbl">Global Rank</div></div>
       <div class="stat-card"><div class="stat-val orange">\${(d.currentStreak??0)} 🔥</div><div class="stat-lbl">Current Streak</div></div>
       <div class="stat-card"><div class="stat-val red">\${d.maxStreak??0}</div><div class="stat-lbl">Max Streak</div></div>
     </div>
@@ -141,31 +160,172 @@ function render(d) {
       <div class="progress-sub">\${pct150}% of NeetCode 150 complete · \${Math.max(0,150-d.solved)} problems to go</div>
     </div>
     \${d.leaderboardBuckets?.length ? renderDist(d.leaderboardBuckets) : ""}
-    \${d.activityByDate ? renderHeatmap(d.activityByDate, activeDays) : ""}
+    \${Object.keys(_activity).length ? renderHeatmapCard(allYears) : ""}
     \${d.courses && Object.keys(d.courses).length ? renderCourses(d.courses) : ""}
     <div class="share-footer"><p>Generated by <a href="https://github.com" target="_blank">NeetCode Profile Share</a> · Unofficial · Updated \${ago}</p></div>
   \`;
+
+  attachYearListeners();
 }
 
+// ── Year helpers ──────────────────────────────────────────────────────────
+function getYears(activity) {
+  const s = new Set(Object.keys(activity).map(k => parseInt(k.slice(0,4))));
+  s.add(new Date().getFullYear());
+  return Array.from(s).sort();
+}
+function activeDays(activity, year) {
+  return Object.keys(activity).filter(k => k.startsWith(String(year))).length;
+}
+function totalSubs(activity, year) {
+  return Object.entries(activity).filter(([k]) => k.startsWith(String(year))).reduce((s,[,v]) => s + (v.count||0), 0);
+}
+function bestDay(activity, year) {
+  let best = 0;
+  Object.entries(activity).forEach(([k,v]) => { if(k.startsWith(String(year))) best = Math.max(best, v.count||0); });
+  return best;
+}
+
+// ── Heatmap card (with year filter) ──────────────────────────────────────
+function renderHeatmapCard(allYears) {
+  const yearBtns = allYears.map(y =>
+    \`<button class="year-btn \${y===_selectedYear?"active":""}" data-year="\${y}">\${y}</button>\`
+  ).join("");
+  return \`
+    <div class="card">
+      <div class="heatmap-header">
+        <div class="sec-label" style="margin-bottom:0">Submission Activity</div>
+        <div class="year-filter">\${yearBtns}</div>
+      </div>
+      <div id="hm-grid">\${renderHeatmapGrid(_activity, _selectedYear)}</div>
+      <div class="year-stats">
+        <div class="year-stat">
+          <div class="year-stat-val" id="ys-days">\${activeDays(_activity,_selectedYear)}</div>
+          <div class="year-stat-lbl">Active Days</div>
+        </div>
+        <div class="year-stat">
+          <div class="year-stat-val" id="ys-subs">\${totalSubs(_activity,_selectedYear)}</div>
+          <div class="year-stat-lbl">Total Submissions</div>
+        </div>
+        <div class="year-stat">
+          <div class="year-stat-val" id="ys-best">\${bestDay(_activity,_selectedYear)}</div>
+          <div class="year-stat-lbl">Best Day</div>
+        </div>
+      </div>
+    </div>\`;
+}
+
+function renderHeatmapGrid(activity, year) {
+  const isCur = year === new Date().getFullYear();
+  const today = new Date(); today.setHours(0,0,0,0);
+  let start, end;
+  if (isCur) {
+    end = new Date(today);
+    start = new Date(today);
+    start.setDate(start.getDate() - 364 - start.getDay());
+  } else {
+    start = new Date(year, 0, 1);
+    start.setDate(start.getDate() - start.getDay());
+    end = new Date(year, 11, 31);
+  }
+
+  const weeks = [], cur = new Date(start);
+  while (cur <= end) {
+    const week = [];
+    for (let d = 0; d < 7; d++) {
+      const key = cur.toISOString().slice(0,10);
+      const inRange = isCur ? cur <= today : parseInt(key.slice(0,4)) === year;
+      const count = inRange ? (activity[key]?.count ?? 0) : 0;
+      const level = count===0?0:count<=3?1:count<=10?2:count<=20?3:4;
+      const hide = isCur ? cur > today : parseInt(key.slice(0,4)) !== year;
+      week.push({ key, count, level, hide });
+      cur.setDate(cur.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  let lastM = -1;
+  const ml = weeks.map(w => {
+    const m = new Date(w[0].key).getMonth();
+    if (m !== lastM) { lastM = m; return \`<span class="month-lbl">\${MONTHS[m]}</span>\`; }
+    return \`<span class="month-lbl"></span>\`;
+  }).join("");
+
+  const grid = weeks.map(w =>
+    \`<div class="heatmap-week">\${w.map(c =>
+      c.hide
+        ? \`<div class="cell" style="background:transparent"></div>\`
+        : \`<div class="cell" data-l="\${c.level}" data-tip="\${c.count} submissions on \${c.key}"></div>\`
+    ).join("")}</div>\`
+  ).join("");
+
+  return \`
+    <div class="heatmap-wrap">
+      <div class="heatmap-months">\${ml}</div>
+      <div class="heatmap-grid">\${grid}</div>
+    </div>
+    <div class="heatmap-footer">
+      <span>Less</span>
+      <span style="display:flex;gap:3px;align-items:center">
+        \${["var(--border)","#033a16","#196c2e","#2ea043","#56d364"].map(c=>\`<span style="width:12px;height:12px;border-radius:2px;background:\${c};display:inline-block"></span>\`).join("")}
+      </span>
+      <span>More</span>
+    </div>\`;
+}
+
+function attachYearListeners() {
+  document.querySelectorAll(".year-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      _selectedYear = parseInt(btn.dataset.year);
+      document.querySelectorAll(".year-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("hm-grid").innerHTML = renderHeatmapGrid(_activity, _selectedYear);
+      document.getElementById("ys-days").textContent = activeDays(_activity, _selectedYear);
+      document.getElementById("ys-subs").textContent = totalSubs(_activity, _selectedYear);
+      document.getElementById("ys-best").textContent = bestDay(_activity, _selectedYear);
+    });
+  });
+}
+
+// ── Smart tooltip ─────────────────────────────────────────────────────────
+(function() {
+  const tip = document.getElementById("hm-tip");
+  const M = 10;
+  document.addEventListener("mouseover", e => {
+    const c = e.target.closest(".cell[data-tip]");
+    if (!c) return;
+    tip.textContent = c.dataset.tip;
+    tip.style.opacity = "1";
+  });
+  document.addEventListener("mousemove", e => {
+    const c = e.target.closest(".cell[data-tip]");
+    if (!c) { tip.style.opacity = "0"; return; }
+    const tw = tip.offsetWidth, th = tip.offsetHeight, vw = window.innerWidth;
+    let x = e.clientX - tw/2, y = e.clientY - th - M;
+    if (y < M) y = e.clientY + M + 16;
+    if (x < M) x = M;
+    if (x + tw > vw - M) x = vw - tw - M;
+    tip.style.left = x + "px";
+    tip.style.top  = y + "px";
+  });
+  document.addEventListener("mouseout", e => {
+    if (e.target.closest(".cell[data-tip]")) tip.style.opacity = "0";
+  });
+})();
+
+// ── Other renderers ───────────────────────────────────────────────────────
 function renderDist(buckets) {
   const max = Math.max(...buckets.map(b=>b.percentage));
   const bars = buckets.map(b=>\`<div class="dist-col"><div class="dist-pct">\${b.percentage.toFixed(1)}%</div><div class="dist-bar \${b.isUserBucket?"me":""}" style="height:\${Math.round((b.percentage/max)*68)}px"></div><div class="dist-lbl">\${b.label}</div></div>\`).join("");
   return \`<div class="card"><div class="sec-label">Leaderboard Distribution</div><div style="font-size:12px;color:var(--text2)">Your bucket highlighted</div><div class="dist-bars">\${bars}</div></div>\`;
 }
 
-function renderHeatmap(activityByDate, activeDays) {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const start = new Date(today); start.setDate(start.getDate()-364-start.getDay());
-  const weeks=[]; const cur=new Date(start);
-  while(cur<=today){const week=[];for(let d=0;d<7;d++){const key=cur.toISOString().slice(0,10);const count=activityByDate[key]?.count??0;const level=count===0?0:count<=3?1:count<=10?2:count<=20?3:4;week.push({key,count,level,future:cur>today});cur.setDate(cur.getDate()+1);}weeks.push(week);}
-  const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];let lastM=-1;
-  const ml=weeks.map(w=>{const m=w[0].date?.getMonth()??new Date(w[0].key).getMonth();if(m!==lastM){lastM=m;return \`<span class="month-lbl">\${MONTHS[m]}</span>\`;}return \`<span class="month-lbl"></span>\`;}).join("");
-  const grid=weeks.map(w=>\`<div class="heatmap-week">\${w.map(c=>c.future?\`<div class="cell" style="background:transparent"></div>\`:\`<div class="cell" data-l="\${c.level}" data-tip="\${c.count} submissions on \${c.key}"></div>\`).join("")}</div>\`).join("");
-  return \`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div class="sec-label" style="margin-bottom:0">Submission Activity</div><div style="font-size:12px;color:var(--text3)">\${activeDays} active days</div></div><div class="heatmap-wrap"><div class="heatmap-months">\${ml}</div><div class="heatmap-grid">\${grid}</div></div><div class="heatmap-footer"><span>Less</span><span style="display:flex;gap:3px">\${[0,1,2,3,4].map(l=>\`<span style="width:12px;height:12px;border-radius:2px;background:\${["var(--border)","#033a16","#196c2e","#2ea043","#56d364"][l]};display:inline-block"></span>\`).join("")}</span><span>More</span></div></div>\`;
-}
-
 function renderCourses(courses) {
-  const cards=Object.values(courses).map(c=>{const pct=c.total>0?Math.round((c.completed/c.total)*100):0;return \`<div class="course-card"><div class="course-name">\${esc(c.name)}</div><div class="course-bar"><div class="course-fill \${pct===100?"done":""}" style="width:\${pct}%"></div></div><div class="course-prog">\${c.completed}/\${c.total} · \${pct}%</div></div>\`;}).join("");
+  const cards = Object.values(courses).map(c => {
+    const pct = c.total>0 ? Math.round((c.completed/c.total)*100) : 0;
+    return \`<div class="course-card"><div class="course-name">\${esc(c.name)}</div><div class="course-bar"><div class="course-fill \${pct===100?"done":""}" style="width:\${pct}%"></div></div><div class="course-prog">\${c.completed}/\${c.total} · \${pct}%</div></div>\`;
+  }).join("");
   return \`<div class="card"><div class="sec-label">Course Progress</div><div class="courses-grid">\${cards}</div></div>\`;
 }
 
