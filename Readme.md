@@ -4,8 +4,6 @@ Get a shareable public profile URL for your NeetCode account — paste it in you
 
 **Example:** `https://neetcard.vercel.app/u/yourname`
 
-![NeetCard Profile Preview](screenshot.png)
-
 ---
 
 ## Install
@@ -27,6 +25,8 @@ Get a shareable public profile URL for your NeetCode account — paste it in you
 6. Done ✅
 
 ---
+
+![NeetCard Profile Preview](screenshot.png)
 
 ## Get Your Profile URL
 
