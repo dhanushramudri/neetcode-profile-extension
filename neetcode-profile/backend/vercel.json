@@ -1,8 +1,7 @@
 {
   "version": 2,
-  "routes": [
-    { "src": "/api/profile/([^/]+)", "dest": "/api/profile?username=$1" },
-    { "src": "/api/profile", "dest": "/api/profile" },
-    { "src": "/u/([^/]+)", "dest": "/public/profile.html" }
+  "rewrites": [
+    { "source": "/api/profile/:username", "destination": "/api/profile?username=:username" },
+    { "source": "/u/:username", "destination": "/public/profile.html" }
   ]
 }
